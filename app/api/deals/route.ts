@@ -1,12 +1,43 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { z } from 'zod'
 
-export async function GET() {
+const dealSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
+  url: z.string().url().optional(),
+  source: z.string().optional(),
+  price: z.number().min(0, 'Price must be positive'),
+  originalPrice: z.number().min(0).optional(),
+  discount: z.number().min(0).optional(),
+  status: z.enum(['OPEN', 'CLOSED', 'PENDING']).default('OPEN'),
+  category: z.string().optional()
+})
+
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const skip = (page - 1) * limit
+
     const deals = await prisma.deal.findMany({
+      skip,
+      take: limit,
       orderBy: { createdAt: 'desc' }
     })
-    return NextResponse.json(deals)
+    
+    const total = await prisma.deal.count()
+
+    return NextResponse.json({
+      data: deals,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    })
   } catch (error) {
     console.error('Error fetching deals:', error)
     return NextResponse.json({ error: 'Failed to fetch deals' }, { status: 500 })
@@ -16,20 +47,17 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { title, description, price, category, status } = body
+    const parsedData = dealSchema.safeParse(body)
 
-    if (!title || price === undefined) {
-      return NextResponse.json({ error: 'Title and price are required' }, { status: 400 })
+    if (!parsedData.success) {
+      return NextResponse.json(
+        { error: 'Validation Error', details: parsedData.error.format() },
+        { status: 400 }
+      )
     }
 
     const deal = await prisma.deal.create({
-      data: {
-        title,
-        description,
-        price: parseFloat(price),
-        category,
-        status: status || 'open'
-      }
+      data: parsedData.data
     })
 
     return NextResponse.json(deal, { status: 201 })
