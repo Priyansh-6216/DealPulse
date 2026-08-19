@@ -10,6 +10,17 @@ datasource db {
   provider = "postgresql"
 }
 
+enum PlanTier {
+  FREE
+  PRO
+}
+
+enum DealStatus {
+  OPEN
+  CLOSED
+  PENDING
+}
+
 model User {
   id            String         @id @default(uuid())
   email         String         @unique
@@ -25,31 +36,35 @@ model Subscription {
   userId           String   @unique
   user             User     @relation(fields: [userId], references: [id])
   stripeCustomerId String?  @unique
-  planTier         String   @default("free") // "free", "pro"
+  planTier         PlanTier @default(FREE)
   status           String   @default("active")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
 
 model Deal {
-  id          String         @id @default(uuid())
-  title       String
-  description String?
-  price       Float
-  status      String         @default("open") // "open", "closed", "pending"
-  category    String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  snapshots   DealSnapshot[]
+  id            String         @id @default(uuid())
+  title         String
+  description   String?
+  url           String?
+  source        String?
+  price         Float
+  originalPrice Float?
+  discount      Float?
+  status        DealStatus     @default(OPEN)
+  category      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  snapshots     DealSnapshot[]
 }
 
 model DealSnapshot {
-  id        String   @id @default(uuid())
-  dealId    String
-  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  price     Float
-  status    String
-  capturedAt DateTime @default(now())
+  id         String     @id @default(uuid())
+  dealId     String
+  deal       Deal       @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  price      Float
+  status     DealStatus
+  capturedAt DateTime   @default(now())
 
   @@index([dealId, capturedAt])
 }
