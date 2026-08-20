@@ -47,3 +47,73 @@ async function scrapeDeals(): Promise<ScrapedDeal[]> {
     }
   ];
 }
+
+async function processDeals(deals: ScrapedDeal[]) {
+  console.log(`Processing ${deals.length} deals...`);
+  
+  for (const dealData of deals) {
+    // Upsert the deal based on the title as a unique identifier for this mock
+    // In reality, you'd likely use the URL or a specific item ID from the source
+    const existingDeal = await prisma.deal.findFirst({
+      where: { title: dealData.title }
+    });
+    
+    let dealId: string;
+    
+    if (existingDeal) {
+      console.log(`Updating existing deal: ${dealData.title}`);
+      const updated = await prisma.deal.update({
+        where: { id: existingDeal.id },
+        data: {
+          price: dealData.price,
+          discount: dealData.discount,
+          description: dealData.description,
+          status: 'OPEN'
+        }
+      });
+      dealId = updated.id;
+    } else {
+      console.log(`Creating new deal: ${dealData.title}`);
+      const created = await prisma.deal.create({
+        data: {
+          title: dealData.title,
+          description: dealData.description,
+          price: dealData.price,
+          originalPrice: dealData.originalPrice,
+          discount: dealData.discount,
+          url: dealData.url,
+          source: dealData.source,
+          category: dealData.category,
+          status: 'OPEN'
+        }
+      });
+      dealId = created.id;
+    }
+    
+    // Create a snapshot to track history
+    await prisma.dealSnapshot.create({
+      data: {
+        dealId,
+        price: dealData.price,
+        status: 'OPEN'
+      }
+    });
+  }
+}
+
+async function main() {
+  try {
+    const deals = await scrapeDeals();
+    await processDeals(deals);
+    console.log('Successfully completed daily scrape sync.');
+  } catch (error) {
+    console.error('Error during scrape execution:', error);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// Execute if run directly
+if (require.main === module) {
+  main();
+}
