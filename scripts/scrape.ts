@@ -101,19 +101,21 @@ async function processDeals(deals: ScrapedDeal[]) {
   }
 }
 
-async function main() {
+export async function syncDeals() {
   try {
     const deals = await scrapeDeals();
     await processDeals(deals);
     console.log('Successfully completed daily scrape sync.');
+    return { success: true, count: deals.length };
   } catch (error) {
     console.error('Error during scrape execution:', error);
-  } finally {
-    await prisma.$disconnect();
+    throw error;
   }
 }
 
 // Execute if run directly
 if (require.main === module) {
-  main();
+  syncDeals()
+    .catch(console.error)
+    .finally(() => prisma.$disconnect());
 }
